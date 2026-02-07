@@ -11,6 +11,8 @@ export interface ModalFileEntry {
 export class DiffReviewModal {
   private _selectedIndex: number = 0;
   private _fileList: ModalFileEntry[] = [];
+  private _filePickerOpen: boolean = false;
+  private _filePickerIndex: number = 0;
 
   constructor(private diffState: DiffState) {
     this.refresh();
@@ -134,5 +136,64 @@ export class DiffReviewModal {
     } else if (this._selectedIndex >= this._fileList.length) {
       this._selectedIndex = this._fileList.length - 1;
     }
+  }
+
+  /**
+   * Check if file picker is open
+   */
+  get isFilePickerOpen(): boolean {
+    return this._filePickerOpen;
+  }
+
+  /**
+   * Get current file picker index
+   */
+  get filePickerIndex(): number {
+    return this._filePickerIndex;
+  }
+
+  /**
+   * Open the file picker
+   */
+  openFilePicker(): void {
+    this._filePickerOpen = true;
+    this._filePickerIndex = this._selectedIndex;
+  }
+
+  /**
+   * Close the file picker
+   */
+  closeFilePicker(): void {
+    this._filePickerOpen = false;
+  }
+
+  /**
+   * Navigate to next file in picker
+   */
+  filePickerNext(): void {
+    if (this._fileList.length === 0) {
+      return;
+    }
+    this._filePickerIndex = (this._filePickerIndex + 1) % this._fileList.length;
+  }
+
+  /**
+   * Navigate to previous file in picker
+   */
+  filePickerPrevious(): void {
+    if (this._fileList.length === 0) {
+      return;
+    }
+    this._filePickerIndex = this._filePickerIndex === 0 
+      ? this._fileList.length - 1 
+      : this._filePickerIndex - 1;
+  }
+
+  /**
+   * Confirm file picker selection (jump to selected file and close picker)
+   */
+  confirmFilePickerSelection(): void {
+    this._selectedIndex = this._filePickerIndex;
+    this._filePickerOpen = false;
   }
 }

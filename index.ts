@@ -143,90 +143,157 @@ export default function (pi: ExtensionAPI) {
           return {
             render(width: number): string[] {
               const lines: string[] = [];
-              const height = tui.height;
+              const height = tui.height ?? 50;
               const fileList = modal.getFileList();
 
-              // Title bar
-              lines.push(
-                theme.fg("accent", theme.bold(" Diff Review ")) +
-                  theme.fg("muted", `(${fileList.length} files)`)
-              );
-              lines.push(theme.fg("border", "─".repeat(Math.min(width, 80))));
-
               if (fileList.length === 0) {
+                lines.push(
+                  theme.fg("accent", theme.bold(" Diff Review ")) +
+                    theme.fg("muted", "(0 files)")
+                );
+                lines.push(theme.fg("border", "─".repeat(Math.min(width, 80))));
                 lines.push(theme.fg("muted", " No files to review"));
                 lines.push("");
                 lines.push(theme.fg("dim", " Press Escape or Ctrl+R to close"));
                 return lines;
               }
 
-              // File list
-              for (let i = 0; i < fileList.length; i++) {
-                const file = fileList[i];
-                const selected = i === modal.selectedIndex;
-                const prefix = selected ? "▸ " : "  ";
-                const name = selected
-                  ? theme.fg("accent", file.path)
-                  : theme.fg("text", file.path);
-                const stats = theme.fg("muted", ` +${file.additions}/-${file.deletions}`);
-                const tag = file.isNewFile ? theme.fg("success", " [new]") : "";
-                lines.push(truncateToWidth(`${prefix}${name}${stats}${tag}`, width));
+              // File picker mode
+              if (modal.isFilePickerOpen) {
+                lines.push(theme.fg("accent", theme.bold(" File Picker ")));
+                lines.push(theme.fg("border", "─".repeat(Math.min(width, 80))));
+                lines.push("");
+
+                // Center the file list
+                for (let i = 0; i < fileList.length; i++) {
+                  const file = fileList[i];
+                  const selected = i === modal.filePickerIndex;
+                  const prefix = selected ? "▸ " : "  ";
+                  const name = selected
+                    ? theme.fg("accent", file.path)
+                    : theme.fg("text", file.path);
+                  const stats = theme.fg("muted", ` +${file.additions}/-${file.deletions}`);
+                  const tag = file.isNewFile ? theme.fg("success", " [new]") : "";
+                  lines.push(truncateToWidth(`${prefix}${name}${stats}${tag}`, width));
+                }
+
+                lines.push("");
+                lines.push(theme.fg("dim", " ↑↓ navigate  Enter select  Esc cancel"));
+                return lines.map((l) => truncateToWidth(l, width));
               }
 
+              // Full-screen diff view
+              const currentFile = fileList[modal.selectedIndex];
+              const fileIndex = modal.selectedIndex + 1;
+              const totalFiles = fileList.length;
+
+              // Header bar: [N/M] filepath  +X/-Y         View mode
+              const fileNumStr = `[${fileIndex}/${totalFiles}]`;
+              const filePathStr = theme.fg("accent", currentFile.path);
+              const statsStr = theme.fg("muted", ` +${currentFile.additions}/-${currentFile.deletions}`);
+              const viewModeStr = viewController 
+                ? (viewController.viewMode === "inline" ? "Inline view" : "Side-by-side view")
+                : "";
+
+              // Build header with view mode right-aligned
+              const leftSide = `${fileNumStr} ${filePathStr}${statsStr}`;
+              const leftSideStripped = `${fileNumStr} ${currentFile.path} +${currentFile.additions}/-${currentFile.deletions}`;
+              const padding = Math.max(1, width - leftSideStripped.length - viewModeStr.length);
+              const header = leftSide + " ".repeat(padding) + theme.fg("dim", viewModeStr);
+              
+              lines.push(truncateToWidth(header, width));
               lines.push(theme.fg("border", "─".repeat(Math.min(width, 80))));
-
-              // View mode
-              if (viewController) {
-                const mode = viewController.viewMode === "inline" ? "Inline" : "Side-by-side";
-                lines.push(theme.fg("dim", ` ${mode} view`));
-              }
 
               // Diff content
               if (viewController) {
-                // In overlay mode tui.height is undefined, so use a generous max
-                const availableHeight = Math.max(5, (height ?? 50) - lines.length - 2);
+                // Reserve space for header (2 lines), scroll indicator (1 line), and help (2 lines)
+                const availableHeight = Math.max(5, height - 5);
                 const diffLines = viewController.render(width, availableHeight);
                 lines.push(...diffLines);
 
+                // Scroll indicator
                 if (viewController.totalLines > availableHeight) {
                   const pct = Math.round(
                     ((viewController.scrollOffset + availableHeight) /
                       viewController.totalLines) * 100
                   );
-                  lines.push(theme.fg("dim", ` ── ${Math.min(pct, 100)}% ──`));
+                  lines.push(theme.fg("dim", `── ${Math.min(pct, 100)}% ──`));
                 }
               }
 
               // Help
               lines.push("");
               lines.push(
-                theme.fg("dim", " ↑↓ navigate  Tab toggle view  d dismiss  y copy path  Esc close")
+                theme.fg("dim", " n/p files  d dismiss  Tab file list  Ctrl+D/U scroll  v view  y copy  Esc close")
               );
 
               return lines.map((l) => truncateToWidth(l, width));
             },
 
             handleInput(data: string) {
+              // File picker mode
+              if (modal.isFilePickerOpen) {
+                if (matchesKey(data, Key.escape)) {
+                  modal.closeFilePicker();
+                  tui.requestRender();
+                  return;
+                }
+
+                if (matchesKey(data, Key.up) || data === "k") {
+                  modal.filePickerPrevious();
+                  tui.requestRender();
+                  return;
+                }
+
+                if (matchesKey(data, Key.down) || data === "j") {
+                  modal.filePickerNext();
+                  tui.requestRender();
+                  return;
+                }
+
+                if (matchesKey(data, Key.enter)) {
+                  modal.confirmFilePickerSelection();
+                  buildViewController();
+                  tui.requestRender();
+                  return;
+                }
+
+                return; // Ignore other keys in file picker mode
+              }
+
+              // Normal diff view mode
               if (matchesKey(data, Key.escape)) {
                 done();
                 return;
               }
 
-              // File navigation
-              if (matchesKey(data, Key.up) || data === "k") {
-                modal.selectPrevious();
-                buildViewController();
-                tui.requestRender();
-                return;
-              }
-              if (matchesKey(data, Key.down) || data === "j") {
+              // File navigation (n/p)
+              if (data === "n") {
                 modal.selectNext();
                 buildViewController();
                 tui.requestRender();
                 return;
               }
+              if (data === "p") {
+                modal.selectPrevious();
+                buildViewController();
+                tui.requestRender();
+                return;
+              }
 
-              // Scroll diff (Ctrl+U / Ctrl+D for half-page)
+              // Line-by-line scrolling (j/k and arrow keys)
+              if (matchesKey(data, Key.up) || data === "k") {
+                viewController?.scrollUp(1);
+                tui.requestRender();
+                return;
+              }
+              if (matchesKey(data, Key.down) || data === "j") {
+                viewController?.scrollDown(1);
+                tui.requestRender();
+                return;
+              }
+
+              // Half-page scroll (Ctrl+U / Ctrl+D)
               if (matchesKey(data, Key.ctrl("u"))) {
                 viewController?.scrollUp(10);
                 tui.requestRender();
@@ -238,8 +305,15 @@ export default function (pi: ExtensionAPI) {
                 return;
               }
 
-              // Toggle view mode
+              // Open file picker (Tab)
               if (matchesKey(data, Key.tab)) {
+                modal.openFilePicker();
+                tui.requestRender();
+                return;
+              }
+
+              // Toggle view mode (v)
+              if (data === "v") {
                 viewController?.toggleViewMode(tui.width);
                 tui.requestRender();
                 return;

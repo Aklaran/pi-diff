@@ -238,4 +238,86 @@ describe('DiffReviewModal', () => {
       expect(modal.selectedIndex).toBe(0);
     });
   });
+
+  describe('file picker', () => {
+    it('starts with file picker closed', () => {
+      expect(modal.isFilePickerOpen).toBe(false);
+    });
+
+    it('opens file picker', () => {
+      modal.openFilePicker();
+      expect(modal.isFilePickerOpen).toBe(true);
+    });
+
+    it('closes file picker', () => {
+      modal.openFilePicker();
+      modal.closeFilePicker();
+      expect(modal.isFilePickerOpen).toBe(false);
+    });
+
+    it('file picker index starts at current selection', () => {
+      diffState.trackFile('file1.ts', 'a', 'b');
+      diffState.trackFile('file2.ts', 'c', 'd');
+      modal.refresh();
+      
+      modal.selectIndex(1);
+      modal.openFilePicker();
+      expect(modal.filePickerIndex).toBe(1);
+    });
+
+    it('navigates file picker next', () => {
+      diffState.trackFile('file1.ts', 'a', 'b');
+      diffState.trackFile('file2.ts', 'c', 'd');
+      modal.refresh();
+      modal.openFilePicker();
+      
+      modal.filePickerNext();
+      expect(modal.filePickerIndex).toBe(1);
+    });
+
+    it('navigates file picker previous', () => {
+      diffState.trackFile('file1.ts', 'a', 'b');
+      diffState.trackFile('file2.ts', 'c', 'd');
+      modal.refresh();
+      modal.openFilePicker();
+      
+      modal.filePickerNext();
+      modal.filePickerPrevious();
+      expect(modal.filePickerIndex).toBe(0);
+    });
+
+    it('file picker wraps around at end', () => {
+      diffState.trackFile('file1.ts', 'a', 'b');
+      diffState.trackFile('file2.ts', 'c', 'd');
+      modal.refresh();
+      modal.openFilePicker();
+      
+      modal.filePickerNext(); // index 1
+      modal.filePickerNext(); // wraps to 0
+      expect(modal.filePickerIndex).toBe(0);
+    });
+
+    it('file picker wraps around at start', () => {
+      diffState.trackFile('file1.ts', 'a', 'b');
+      diffState.trackFile('file2.ts', 'c', 'd');
+      modal.refresh();
+      modal.openFilePicker();
+      
+      modal.filePickerPrevious(); // wraps to 1
+      expect(modal.filePickerIndex).toBe(1);
+    });
+
+    it('confirms file picker selection', () => {
+      diffState.trackFile('file1.ts', 'a', 'b');
+      diffState.trackFile('file2.ts', 'c', 'd');
+      modal.refresh();
+      modal.openFilePicker();
+      
+      modal.filePickerNext(); // select index 1
+      modal.confirmFilePickerSelection();
+      
+      expect(modal.selectedIndex).toBe(1);
+      expect(modal.isFilePickerOpen).toBe(false);
+    });
+  });
 });
