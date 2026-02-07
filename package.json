@@ -11,10 +11,9 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "diff": "^7.0.0"
+    "pi-diff-ui": "file:../../../pi-diff-ui"
   },
   "devDependencies": {
-    "vitest": "^3.0.0",
-    "@types/diff": "^7.0.0"
+    "vitest": "^3.0.0"
   }
 }
