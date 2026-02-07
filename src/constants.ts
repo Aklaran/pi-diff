@@ -6,3 +6,7 @@ export const MAX_WIDGET_FILES = 5;
 
 /** Default context lines around diff hunks */
 export const DIFF_CONTEXT_LINES = 3;
+
+/** Overlay size as percentage of terminal */
+export const OVERLAY_WIDTH_PCT = "90%";
+export const OVERLAY_HEIGHT_PCT = "90%";

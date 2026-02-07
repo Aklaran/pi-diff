@@ -175,10 +175,6 @@ export default function (pi: ExtensionAPI) {
 
               lines.push(theme.fg("border", "─".repeat(Math.min(width, 80))));
 
-              // Debug info
-              const selectedDiff = modal.getSelectedDiff();
-              lines.push(theme.fg("warning", ` [debug] viewController=${viewController ? 'yes' : 'null'}, selectedDiff=${selectedDiff ? `hunks:${selectedDiff.hunks.length} +${selectedDiff.additions}/-${selectedDiff.deletions}` : 'null'}, selectedFile=${modal.selectedFile ?? 'none'}`));
-
               // View mode
               if (viewController) {
                 const mode = viewController.viewMode === "inline" ? "Inline" : "Side-by-side";
@@ -187,10 +183,9 @@ export default function (pi: ExtensionAPI) {
 
               // Diff content
               if (viewController) {
-                const availableHeight = Math.max(5, height - lines.length - 2);
-                lines.push(theme.fg("warning", ` [debug] availableHeight=${availableHeight}, totalLines=${viewController.totalLines}, width=${width}, tui.height=${height}`));
+                // In overlay mode tui.height is undefined, so use a generous max
+                const availableHeight = Math.max(5, (height ?? 50) - lines.length - 2);
                 const diffLines = viewController.render(width, availableHeight);
-                lines.push(theme.fg("warning", ` [debug] diffLines.length=${diffLines.length}`));
                 lines.push(...diffLines);
 
                 if (viewController.totalLines > availableHeight) {

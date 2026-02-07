@@ -1,6 +1,6 @@
 # Diff Review 🔍
 
-A Pi extension for reviewing file diffs in a modal overlay. Built with TDD (140 tests).
+A Pi extension for reviewing file diffs in a modal overlay. Built with TDD (140 tests). Powered by Beads for task tracking.
 
 ## Features
 
