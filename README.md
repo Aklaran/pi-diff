@@ -1,21 +1,23 @@
 # Diff Review 🔍
 
-A Pi extension for reviewing file diffs in a modal overlay. Built with TDD (140 tests). Powered by Beads for task tracking.
+A [Pi](https://github.com/badlogic/pi-mono) extension for reviewing file diffs in a full-screen modal overlay. Tracks every file the agent touches and lets you review changes with vim-style navigation.
+
+Uses [pi-diff-ui](https://github.com/Aklaran/pi-diff-ui) for core diff rendering.
 
 ## Features
 
 - **Unified diffs** across multiple edits to the same file
-- **Inline and side-by-side** view modes (auto-fallback on narrow terminals)
-- **Syntax highlighting** via Pi's `highlightCode()`
-- **Keyboard-driven** navigation, dismissal, clipboard copy
+- **Full-screen per file** layout with box-drawn borders
+- **Cursor tracking** with auto-scroll and visual line selection (`V`)
+- **Yank to editor** (`y`) — pastes selected code blocks directly into Pi chat
 - **Status indicator** showing pending file count
 
 ## Installation
 
-Symlink into your Pi extensions directory:
-
 ```bash
+git clone git@github.com:Aklaran/pi-diff.git ~/repos/diff-review
 ln -sfn ~/repos/diff-review ~/.pi/agent/extensions/diff-review
+cd ~/repos/diff-review && pnpm install && pnpm build
 ```
 
 Then `/reload` in Pi.
@@ -26,8 +28,14 @@ Then `/reload` in Pi.
 |-----|--------|
 | `Ctrl+Shift+R` | Toggle review modal |
 | `↑/↓` or `j/k` | Navigate files |
-| `Tab` | Toggle inline/side-by-side |
 | `Ctrl+U/Ctrl+D` | Scroll diff half-page |
+| `V` | Visual line selection |
+| `y` | Yank selection to Pi editor + close |
 | `d` | Dismiss file (resets baseline) |
-| `y` | Copy file path to clipboard |
 | `Escape` | Close modal |
+
+## Part of [Himal](https://github.com/Aklaran/himal) 🏔️
+
+## License
+
+MIT
