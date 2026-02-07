@@ -117,6 +117,9 @@ export default function (pi: ExtensionAPI) {
           currentDoneCallback = done;
           let viewController: DiffViewController | null = null;
 
+          // Capture ctx for status updates from within the modal
+          const extCtx = ctx;
+
           function buildViewController() {
             const diff = modal.getSelectedDiff();
             if (diff) {
@@ -244,6 +247,7 @@ export default function (pi: ExtensionAPI) {
               // Dismiss file
               if (data === "d") {
                 modal.dismissSelected();
+                updateStatus(extCtx);
                 buildViewController();
                 tui.requestRender();
                 if (modal.getFileList().length === 0) {
@@ -265,7 +269,16 @@ export default function (pi: ExtensionAPI) {
             invalidate() {},
           };
         },
-        { overlay: true }
+        {
+          overlay: true,
+          overlayOptions: {
+            anchor: "center",
+            width: "90%",
+            maxHeight: "90%",
+            minWidth: 60,
+            margin: 1,
+          },
+        }
       );
 
       modalOpen = false;
