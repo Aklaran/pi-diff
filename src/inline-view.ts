@@ -12,6 +12,8 @@ export class InlineDiffView {
   private highlightFn?: HighlightFn;
   private renderedLines: RenderedLine[] = [];
   private _scrollOffset = 0;
+  private _cursorLine = 0;
+  private _lineToHunkIndex: number[] = [];
 
   constructor(diff: FileDiff, highlightFn?: HighlightFn) {
     this.diff = diff;
@@ -19,14 +21,51 @@ export class InlineDiffView {
     this.buildRenderedLines();
   }
 
+  get cursorLine(): number {
+    return this._cursorLine;
+  }
+
   setDiff(diff: FileDiff): void {
     this.diff = diff;
     this._scrollOffset = 0;
+    this._cursorLine = 0;
     this.buildRenderedLines();
+  }
+
+  moveCursor(delta: number): void {
+    const newCursor = this._cursorLine + delta;
+    this.setCursor(newCursor);
+  }
+
+  setCursor(line: number): void {
+    const maxLine = Math.max(0, this.renderedLines.length - 1);
+    this._cursorLine = Math.max(0, Math.min(line, maxLine));
+    // Auto-scroll happens in render() since we need visibleHeight
+  }
+
+  getCursorDiffLine(): DiffLine | undefined {
+    if (this.renderedLines.length === 0) {
+      return undefined;
+    }
+    
+    const hunkIndex = this._lineToHunkIndex[this._cursorLine];
+    if (hunkIndex === -1 || hunkIndex === undefined) {
+      return undefined;
+    }
+    
+    return this.diff.hunks[hunkIndex];
+  }
+
+  isSeparatorLine(index: number): boolean {
+    if (index < 0 || index >= this._lineToHunkIndex.length) {
+      return false;
+    }
+    return this._lineToHunkIndex[index] === -1;
   }
 
   scrollUp(lines: number = 1): void {
     this._scrollOffset = Math.max(0, this._scrollOffset - lines);
+    this.moveCursor(-lines);
   }
 
   scrollDown(lines: number = 1): void {
@@ -34,14 +73,17 @@ export class InlineDiffView {
       Math.max(0, this.renderedLines.length),
       this._scrollOffset + lines
     );
+    this.moveCursor(lines);
   }
 
   scrollToTop(): void {
     this._scrollOffset = 0;
+    this._cursorLine = 0;
   }
 
   scrollToBottom(): void {
     this._scrollOffset = Math.max(0, this.renderedLines.length);
+    this._cursorLine = Math.max(0, this.renderedLines.length - 1);
   }
 
   get totalLines(): number {
@@ -53,6 +95,14 @@ export class InlineDiffView {
   }
 
   render(width: number, visibleHeight: number): string[] {
+    // Auto-scroll to keep cursor visible
+    if (this._cursorLine >= this._scrollOffset + visibleHeight) {
+      this._scrollOffset = this._cursorLine - visibleHeight + 1;
+    }
+    if (this._cursorLine < this._scrollOffset) {
+      this._scrollOffset = this._cursorLine;
+    }
+    
     // Clamp scroll offset to ensure we can fill visibleHeight if possible
     const maxOffset = Math.max(0, this.renderedLines.length - visibleHeight);
     const offset = Math.min(this._scrollOffset, maxOffset);
@@ -61,11 +111,26 @@ export class InlineDiffView {
     const endIndex = Math.min(offset + visibleHeight, this.renderedLines.length);
     const visibleLines = this.renderedLines.slice(offset, endIndex);
 
-    return visibleLines.map(line => this.truncateToWidth(line.content, width));
+    return visibleLines.map((line, index) => {
+      const lineIndex = offset + index;
+      let content = line.content;
+      
+      // Highlight cursor line with reverse video
+      if (lineIndex === this._cursorLine) {
+        // Insert reverse video before the content and end it before final reset
+        // Replace the final \x1b[0m with \x1b[27m\x1b[0m to properly end reverse video
+        content = content.replace(/\x1b\[0m$/, '\x1b[27m\x1b[0m');
+        // Insert reverse video at the start (after any initial color codes)
+        content = content.replace(/^(\x1b\[\d+m)?/, '$1\x1b[7m');
+      }
+      
+      return this.truncateToWidth(content, width);
+    });
   }
 
   private buildRenderedLines(): void {
     this.renderedLines = [];
+    this._lineToHunkIndex = [];
 
     if (this.diff.hunks.length === 0) {
       return;
@@ -86,10 +151,12 @@ export class InlineDiffView {
         // There's a gap if the current line is not consecutive
         if (currentLineNumber > previousLineNumber + 1) {
           this.renderedLines.push(this.createSeparatorLine());
+          this._lineToHunkIndex.push(-1); // -1 indicates separator
         }
       }
 
       this.renderedLines.push(this.renderHunk(hunk, lineNumberWidth));
+      this._lineToHunkIndex.push(i); // Map to hunk index
 
       // Update previous line number for gap detection
       if (currentLineNumber !== undefined) {

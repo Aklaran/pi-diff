@@ -460,4 +460,285 @@ describe('InlineDiffView', () => {
       expect(lines[0]).toContain('line 1'); // Regular rendering works
     });
   });
+
+  describe('Cursor tracking', () => {
+    it('cursorLine starts at 0', () => {
+      const view = new InlineDiffView(simpleDiff);
+      expect(view.cursorLine).toBe(0);
+    });
+
+    it('moveCursor(1) moves cursor down', () => {
+      const view = new InlineDiffView(simpleDiff);
+      view.moveCursor(1);
+      expect(view.cursorLine).toBe(1);
+      
+      view.moveCursor(2);
+      expect(view.cursorLine).toBe(3);
+    });
+
+    it('moveCursor(-1) from 0 stays at 0 (clamped)', () => {
+      const view = new InlineDiffView(simpleDiff);
+      view.moveCursor(-1);
+      expect(view.cursorLine).toBe(0);
+      
+      view.moveCursor(-10);
+      expect(view.cursorLine).toBe(0);
+    });
+
+    it('moveCursor past end clamps to last line', () => {
+      const view = new InlineDiffView(simpleDiff);
+      const lastLine = view.totalLines - 1;
+      
+      view.moveCursor(1000);
+      expect(view.cursorLine).toBe(lastLine);
+    });
+
+    it('setCursor sets cursor directly', () => {
+      const view = new InlineDiffView(simpleDiff);
+      
+      view.setCursor(2);
+      expect(view.cursorLine).toBe(2);
+      
+      view.setCursor(0);
+      expect(view.cursorLine).toBe(0);
+      
+      view.setCursor(4);
+      expect(view.cursorLine).toBe(4);
+    });
+
+    it('getCursorDiffLine returns DiffLine for hunk line', () => {
+      const view = new InlineDiffView(simpleDiff);
+      
+      view.setCursor(0);
+      let diffLine = view.getCursorDiffLine();
+      expect(diffLine).toBeDefined();
+      expect(diffLine?.type).toBe('context');
+      expect(diffLine?.content).toBe('line 1');
+      
+      view.setCursor(1);
+      diffLine = view.getCursorDiffLine();
+      expect(diffLine).toBeDefined();
+      expect(diffLine?.type).toBe('removed');
+      expect(diffLine?.content).toBe('line 2 old');
+      
+      view.setCursor(2);
+      diffLine = view.getCursorDiffLine();
+      expect(diffLine).toBeDefined();
+      expect(diffLine?.type).toBe('added');
+      expect(diffLine?.content).toBe('line 2 new');
+    });
+
+    it('getCursorDiffLine returns undefined for separator line', () => {
+      const diff: FileDiff = {
+        filePath: 'test.ts',
+        isNewFile: false,
+        additions: 0,
+        deletions: 0,
+        hunks: [
+          { type: 'context', content: 'line 1', oldLineNumber: 1, newLineNumber: 1 },
+          { type: 'context', content: 'line 10', oldLineNumber: 10, newLineNumber: 10 },
+        ],
+      };
+      
+      const view = new InlineDiffView(diff);
+      
+      view.setCursor(0); // First hunk line
+      expect(view.getCursorDiffLine()).toBeDefined();
+      
+      view.setCursor(1); // Separator
+      expect(view.getCursorDiffLine()).toBeUndefined();
+      
+      view.setCursor(2); // Second hunk line
+      expect(view.getCursorDiffLine()).toBeDefined();
+    });
+
+    it('getCursorDiffLine returns undefined for empty diff', () => {
+      const emptyDiff: FileDiff = {
+        filePath: 'empty.ts',
+        isNewFile: false,
+        additions: 0,
+        deletions: 0,
+        hunks: [],
+      };
+      
+      const view = new InlineDiffView(emptyDiff);
+      expect(view.getCursorDiffLine()).toBeUndefined();
+    });
+
+    it('moveCursor auto-scrolls down when cursor passes visible area', () => {
+      const largeDiff: FileDiff = {
+        filePath: 'large.ts',
+        isNewFile: false,
+        additions: 0,
+        deletions: 0,
+        hunks: Array.from({ length: 50 }, (_, i) => ({
+          type: 'context' as const,
+          content: `line ${i + 1}`,
+          oldLineNumber: i + 1,
+          newLineNumber: i + 1,
+        })),
+      };
+      
+      const view = new InlineDiffView(largeDiff);
+      const visibleHeight = 10;
+      
+      // Cursor starts at 0, scroll offset at 0
+      expect(view.cursorLine).toBe(0);
+      expect(view.scrollOffset).toBe(0);
+      
+      // Move cursor to line 12 (past the visible area 0-9)
+      view.moveCursor(12);
+      view.render(80, visibleHeight); // Trigger render to apply clamping
+      
+      expect(view.cursorLine).toBe(12);
+      // Scroll should have moved down to keep cursor visible
+      expect(view.scrollOffset).toBeGreaterThan(0);
+    });
+
+    it('moveCursor auto-scrolls up when cursor passes above visible area', () => {
+      const largeDiff: FileDiff = {
+        filePath: 'large.ts',
+        isNewFile: false,
+        additions: 0,
+        deletions: 0,
+        hunks: Array.from({ length: 50 }, (_, i) => ({
+          type: 'context' as const,
+          content: `line ${i + 1}`,
+          oldLineNumber: i + 1,
+          newLineNumber: i + 1,
+        })),
+      };
+      
+      const view = new InlineDiffView(largeDiff);
+      
+      // Use scrollDown to move both cursor and scroll to line 20
+      view.scrollDown(20);
+      expect(view.cursorLine).toBe(20);
+      expect(view.scrollOffset).toBe(20);
+      
+      view.render(80, 10); // visible area is lines 20-29
+      
+      // Move cursor up to line 10 (above visible area)
+      view.moveCursor(-10);
+      
+      expect(view.cursorLine).toBe(10);
+      // Before render, scroll offset hasn't changed yet
+      expect(view.scrollOffset).toBe(20);
+      
+      // After render, scroll should auto-adjust to keep cursor visible
+      view.render(80, 10);
+      expect(view.scrollOffset).toBe(10);
+    });
+
+    it('scrollDown moves cursor by same amount', () => {
+      const largeDiff: FileDiff = {
+        filePath: 'large.ts',
+        isNewFile: false,
+        additions: 0,
+        deletions: 0,
+        hunks: Array.from({ length: 50 }, (_, i) => ({
+          type: 'context' as const,
+          content: `line ${i + 1}`,
+          oldLineNumber: i + 1,
+          newLineNumber: i + 1,
+        })),
+      };
+      
+      const view = new InlineDiffView(largeDiff);
+      
+      expect(view.cursorLine).toBe(0);
+      expect(view.scrollOffset).toBe(0);
+      
+      view.scrollDown(5);
+      expect(view.cursorLine).toBe(5);
+      expect(view.scrollOffset).toBe(5);
+      
+      view.scrollDown(10);
+      expect(view.cursorLine).toBe(15);
+      expect(view.scrollOffset).toBe(15);
+    });
+
+    it('scrollUp moves cursor by same amount', () => {
+      const largeDiff: FileDiff = {
+        filePath: 'large.ts',
+        isNewFile: false,
+        additions: 0,
+        deletions: 0,
+        hunks: Array.from({ length: 50 }, (_, i) => ({
+          type: 'context' as const,
+          content: `line ${i + 1}`,
+          oldLineNumber: i + 1,
+          newLineNumber: i + 1,
+        })),
+      };
+      
+      const view = new InlineDiffView(largeDiff);
+      
+      view.scrollDown(20);
+      expect(view.cursorLine).toBe(20);
+      expect(view.scrollOffset).toBe(20);
+      
+      view.scrollUp(5);
+      expect(view.cursorLine).toBe(15);
+      expect(view.scrollOffset).toBe(15);
+      
+      view.scrollUp(10);
+      expect(view.cursorLine).toBe(5);
+      expect(view.scrollOffset).toBe(5);
+    });
+
+    it('setDiff resets cursor to 0', () => {
+      const view = new InlineDiffView(simpleDiff);
+      
+      view.setCursor(3);
+      expect(view.cursorLine).toBe(3);
+      
+      const newDiff: FileDiff = {
+        filePath: 'other.ts',
+        isNewFile: false,
+        additions: 1,
+        deletions: 0,
+        hunks: [
+          { type: 'added', content: 'new content', oldLineNumber: undefined, newLineNumber: 1 },
+        ],
+      };
+      
+      view.setDiff(newDiff);
+      expect(view.cursorLine).toBe(0);
+    });
+
+    it('render highlights cursor line with reverse video', () => {
+      const view = new InlineDiffView(simpleDiff);
+      
+      view.setCursor(1); // Set cursor to second line (removed line)
+      const lines = view.render(80, 10);
+      
+      // The line at cursor position should have reverse video
+      expect(lines[1]).toContain('\x1b[7m'); // Reverse video
+      expect(lines[1]).toContain('\x1b[27m'); // End reverse video
+      
+      // Other lines should not have reverse video
+      expect(lines[0]).not.toContain('\x1b[7m');
+      expect(lines[2]).not.toContain('\x1b[7m');
+    });
+
+    it('isSeparatorLine returns true for separator, false for hunk lines', () => {
+      const diff: FileDiff = {
+        filePath: 'test.ts',
+        isNewFile: false,
+        additions: 0,
+        deletions: 0,
+        hunks: [
+          { type: 'context', content: 'line 1', oldLineNumber: 1, newLineNumber: 1 },
+          { type: 'context', content: 'line 10', oldLineNumber: 10, newLineNumber: 10 },
+        ],
+      };
+      
+      const view = new InlineDiffView(diff);
+      
+      expect(view.isSeparatorLine(0)).toBe(false); // First hunk
+      expect(view.isSeparatorLine(1)).toBe(true);  // Separator
+      expect(view.isSeparatorLine(2)).toBe(false); // Second hunk
+    });
+  });
 });
