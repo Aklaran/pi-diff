@@ -5,9 +5,9 @@ import { DiffState } from "./src/diff-state";
 import { DiffReviewModal } from "./src/modal";
 import { DiffViewController } from "./src/diff-view-controller";
 import { getStatusText, getWidgetLines } from "./src/status";
+import { resolvePath } from "./src/path-utils";
 
 import * as fs from "node:fs";
-import * as path from "node:path";
 
 export default function (pi: ExtensionAPI) {
   const state = new DiffState();
@@ -24,10 +24,6 @@ export default function (pi: ExtensionAPI) {
     } catch {
       return "";
     }
-  }
-
-  function resolvePath(filePath: string, cwd: string): string {
-    return path.isAbsolute(filePath) ? filePath : path.resolve(cwd, filePath);
   }
 
   function updateStatus(ctx: any) {
