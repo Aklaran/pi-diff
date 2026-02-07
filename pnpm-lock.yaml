@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       pi-diff-ui:
-        specifier: file:../../../pi-diff-ui
-        version: file:../../../pi-diff-ui
+        specifier: file:../pi-diff-ui
+        version: file:../pi-diff-ui
     devDependencies:
       vitest:
         specifier: ^3.0.0
@@ -439,8 +439,8 @@ packages:
     resolution: {integrity: sha512-//nshmD55c46FuFw26xV/xFAaB5HF9Xdap7HJBBnrKdAd6/GxDBaNA1870O79+9ueg61cZLSVc+OaFlfmObYVQ==}
     engines: {node: '>= 14.16'}
 
-  pi-diff-ui@file:../../../pi-diff-ui:
-    resolution: {directory: ../../../pi-diff-ui, type: directory}
+  pi-diff-ui@file:../pi-diff-ui:
+    resolution: {directory: ../pi-diff-ui, type: directory}
 
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
@@ -864,7 +864,7 @@ snapshots:
 
   pathval@2.0.1: {}
 
-  pi-diff-ui@file:../../../pi-diff-ui:
+  pi-diff-ui@file:../pi-diff-ui:
     dependencies:
       diff: 7.0.0
 
