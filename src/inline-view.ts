@@ -14,6 +14,8 @@ export class InlineDiffView {
   private _scrollOffset = 0;
   private _cursorLine = 0;
   private _lineToHunkIndex: number[] = [];
+  private _visualMode: boolean = false;
+  private _visualAnchor: number = 0;
 
   constructor(diff: FileDiff, highlightFn?: HighlightFn) {
     this.diff = diff;
@@ -25,10 +27,63 @@ export class InlineDiffView {
     return this._cursorLine;
   }
 
+  get isVisualMode(): boolean {
+    return this._visualMode;
+  }
+
+  get visualAnchor(): number {
+    return this._visualAnchor;
+  }
+
+  enterVisualMode(): void {
+    this._visualMode = true;
+    this._visualAnchor = this._cursorLine;
+  }
+
+  exitVisualMode(): void {
+    this._visualMode = false;
+  }
+
+  getVisualRange(): [number, number] {
+    const min = Math.min(this._visualAnchor, this._cursorLine);
+    const max = Math.max(this._visualAnchor, this._cursorLine);
+    return [min, max];
+  }
+
+  getSelectedRawLines(): string[] {
+    const [min, max] = this.getVisualRange();
+    const selectedLines: string[] = [];
+    
+    for (let i = min; i <= max; i++) {
+      if (i >= 0 && i < this.renderedLines.length) {
+        selectedLines.push(this.renderedLines[i].rawContent);
+      }
+    }
+    
+    return selectedLines;
+  }
+
+  getSelectedDiffLines(): DiffLine[] {
+    const [min, max] = this.getVisualRange();
+    const selectedDiffLines: DiffLine[] = [];
+    
+    for (let i = min; i <= max; i++) {
+      if (i >= 0 && i < this._lineToHunkIndex.length) {
+        const hunkIndex = this._lineToHunkIndex[i];
+        if (hunkIndex !== -1 && hunkIndex !== undefined) {
+          selectedDiffLines.push(this.diff.hunks[hunkIndex]);
+        }
+      }
+    }
+    
+    return selectedDiffLines;
+  }
+
   setDiff(diff: FileDiff): void {
     this.diff = diff;
     this._scrollOffset = 0;
     this._cursorLine = 0;
+    this._visualMode = false;
     this.buildRenderedLines();
   }
 
@@ -115,8 +170,15 @@ export class InlineDiffView {
       const lineIndex = offset + index;
       let content = line.content;
       
-      // Highlight cursor line with reverse video
-      if (lineIndex === this._cursorLine) {
+      // Check if line is within visual range
+      let inVisualRange = false;
+      if (this._visualMode) {
+        const [min, max] = this.getVisualRange();
+        inVisualRange = lineIndex >= min && lineIndex <= max;
+      }
+      
+      // Highlight lines in visual range or cursor line with reverse video
+      if (inVisualRange || lineIndex === this._cursorLine) {
         // Insert reverse video before the content and end it before final reset
         // Replace the final \x1b[0m with \x1b[27m\x1b[0m to properly end reverse video
         content = content.replace(/\x1b\[0m$/, '\x1b[27m\x1b[0m');

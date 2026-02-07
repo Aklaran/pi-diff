@@ -1,90 +1,90 @@
-import type { FileDiff } from './diff-engine';
+import type { FileDiff, DiffLine } from './diff-engine';
 import { InlineDiffView, type HighlightFn } from './inline-view';
-import { SideBySideDiffView } from './side-by-side-view';
-
-export type ViewMode = 'inline' | 'side-by-side';
 
 export class DiffViewController {
   private inlineView: InlineDiffView;
-  private sideBySideView: SideBySideDiffView;
-  private _viewMode: ViewMode = 'inline';
 
   constructor(diff: FileDiff, highlightFn?: HighlightFn) {
     this.inlineView = new InlineDiffView(diff, highlightFn);
-    this.sideBySideView = new SideBySideDiffView(diff, highlightFn);
   }
 
   setDiff(diff: FileDiff): void {
     this.inlineView.setDiff(diff);
-    this.sideBySideView.setDiff(diff);
   }
 
-  toggleViewMode(terminalWidth: number): boolean {
-    if (this._viewMode === 'inline') {
-      // Try to switch to side-by-side
-      if (this.canUseSideBySide(terminalWidth)) {
-        this._viewMode = 'side-by-side';
-        this.resetScroll();
-        return true;
-      }
-      return false;
-    } else {
-      // Switch back to inline
-      this._viewMode = 'inline';
-      this.resetScroll();
-      return true;
-    }
-  }
-
-  get viewMode(): ViewMode {
-    return this._viewMode;
-  }
-
-  setViewMode(mode: ViewMode): void {
-    if (this._viewMode !== mode) {
-      this._viewMode = mode;
-      this.resetScroll();
-    }
-  }
-
-  canUseSideBySide(terminalWidth: number): boolean {
-    return terminalWidth >= 120;
-  }
-
+  // Scroll methods
   scrollUp(lines?: number): void {
-    this.getActiveView().scrollUp(lines);
+    this.inlineView.scrollUp(lines);
   }
 
   scrollDown(lines?: number): void {
-    this.getActiveView().scrollDown(lines);
+    this.inlineView.scrollDown(lines);
   }
 
   scrollToTop(): void {
-    this.getActiveView().scrollToTop();
+    this.inlineView.scrollToTop();
   }
 
   scrollToBottom(): void {
-    this.getActiveView().scrollToBottom();
+    this.inlineView.scrollToBottom();
   }
 
+  // Render methods
   render(width: number, visibleHeight: number): string[] {
-    return this.getActiveView().render(width, visibleHeight);
+    return this.inlineView.render(width, visibleHeight);
   }
 
   get totalLines(): number {
-    return this.getActiveView().totalLines;
+    return this.inlineView.totalLines;
   }
 
   get scrollOffset(): number {
-    return this.getActiveView().scrollOffset;
+    return this.inlineView.scrollOffset;
   }
 
-  private getActiveView(): InlineDiffView | SideBySideDiffView {
-    return this._viewMode === 'inline' ? this.inlineView : this.sideBySideView;
+  // Cursor methods
+  get cursorLine(): number {
+    return this.inlineView.cursorLine;
   }
 
-  private resetScroll(): void {
-    this.inlineView.scrollToTop();
-    this.sideBySideView.scrollToTop();
+  moveCursor(delta: number): void {
+    this.inlineView.moveCursor(delta);
+  }
+
+  setCursor(line: number): void {
+    this.inlineView.setCursor(line);
+  }
+
+  getCursorDiffLine(): DiffLine | undefined {
+    return this.inlineView.getCursorDiffLine();
+  }
+
+  isSeparatorLine(index: number): boolean {
+    return this.inlineView.isSeparatorLine(index);
+  }
+
+  // Visual mode methods
+  get isVisualMode(): boolean {
+    return this.inlineView.isVisualMode;
+  }
+
+  enterVisualMode(): void {
+    this.inlineView.enterVisualMode();
+  }
+
+  exitVisualMode(): void {
+    this.inlineView.exitVisualMode();
+  }
+
+  getVisualRange(): [number, number] {
+    return this.inlineView.getVisualRange();
+  }
+
+  getSelectedRawLines(): string[] {
+    return this.inlineView.getSelectedRawLines();
+  }
+
+  getSelectedDiffLines(): DiffLine[] {
+    return this.inlineView.getSelectedDiffLines();
   }
 }

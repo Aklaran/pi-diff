@@ -5,7 +5,7 @@ import { DiffState } from "./src/diff-state";
 import { DiffReviewModal } from "./src/modal";
 import { DiffViewController } from "./src/diff-view-controller";
 import { getStatusText, getWidgetLines } from "./src/status";
-import { copyToClipboard } from "./src/clipboard";
+
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -194,14 +194,14 @@ export default function (pi: ExtensionAPI) {
                 const fileNumStr = `[${fileIndex}/${totalFiles}]`;
                 const filePathStr = theme.fg("accent", currentFile.path);
                 const statsStr = theme.fg("muted", ` +${currentFile.additions}/-${currentFile.deletions}`);
-                const viewModeStr = viewController 
-                  ? (viewController.viewMode === "inline" ? "Inline" : "Side-by-side")
+                const rightIndicator = viewController && viewController.isVisualMode
+                  ? "VISUAL LINE"
                   : "";
 
                 const leftSide = `${fileNumStr} ${filePathStr}${statsStr}`;
                 const leftSideStripped = `${fileNumStr} ${currentFile.path} +${currentFile.additions}/-${currentFile.deletions}`;
-                const hPadding = Math.max(1, innerWidth - leftSideStripped.length - viewModeStr.length);
-                content.push(leftSide + " ".repeat(hPadding) + theme.fg("dim", viewModeStr));
+                const hPadding = Math.max(1, innerWidth - leftSideStripped.length - rightIndicator.length);
+                content.push(leftSide + " ".repeat(hPadding) + theme.fg("accent", rightIndicator));
                 content.push(theme.fg("border", "─".repeat(innerWidth)));
 
                 // Diff content — reserve 4 lines: header, separator, help blank, help text
@@ -243,7 +243,7 @@ export default function (pi: ExtensionAPI) {
 
               // Help line (overwrite last empty line)
               if (fileList.length > 0 && !modal.isFilePickerOpen) {
-                const helpText = theme.fg("dim", "n/p files  d dismiss  Tab file list  Ctrl+D/U scroll  v view  y copy  Esc close");
+                const helpText = theme.fg("dim", "n/p files  d dismiss  Tab list  Ctrl+D/U scroll  y yank  V visual  Esc close");
                 output[output.length - 1] = padLine(helpText);
               }
 
@@ -335,10 +335,16 @@ export default function (pi: ExtensionAPI) {
                 return;
               }
 
-              // Toggle view mode (v)
-              if (data === "v") {
-                viewController?.toggleViewMode(tui.width);
-                tui.requestRender();
+              // Toggle visual mode (V)
+              if (data === "V") {
+                if (viewController) {
+                  if (viewController.isVisualMode) {
+                    viewController.exitVisualMode();
+                  } else {
+                    viewController.enterVisualMode();
+                  }
+                  tui.requestRender();
+                }
                 return;
               }
 
@@ -354,11 +360,48 @@ export default function (pi: ExtensionAPI) {
                 return;
               }
 
-              // Copy file path
+              // Yank to editor
               if (data === "y") {
-                const filePath = modal.getSelectedPath();
-                if (filePath) {
-                  copyToClipboard(filePath);
+                if (viewController) {
+                  if (viewController.isVisualMode) {
+                    // Visual mode: yank selected lines as fenced code block
+                    const diffLines = viewController.getSelectedDiffLines();
+                    if (diffLines.length > 0) {
+                      const filePath = modal.getSelectedPath() || "";
+                      
+                      // Get the line number range
+                      const lineNumbers = diffLines
+                        .map(dl => dl.newLineNumber ?? dl.oldLineNumber)
+                        .filter((n): n is number => n !== undefined);
+                      
+                      if (lineNumbers.length > 0) {
+                        const minLine = Math.min(...lineNumbers);
+                        const maxLine = Math.max(...lineNumbers);
+                        const rangeStr = minLine === maxLine ? `${minLine}` : `${minLine}-${maxLine}`;
+                        
+                        // Build the fenced code block
+                        const header = `\`${filePath}:${rangeStr}\``;
+                        const codeLines = diffLines.map(dl => dl.content);
+                        const fencedBlock = `${header}\n\`\`\`\n${codeLines.join('\n')}\n\`\`\``;
+                        
+                        extCtx.ui.pasteToEditor(fencedBlock);
+                        viewController.exitVisualMode();
+                        done();
+                      }
+                    }
+                  } else {
+                    // Normal mode: yank filepath:linenum
+                    const diffLine = viewController.getCursorDiffLine();
+                    if (diffLine) {
+                      const filePath = modal.getSelectedPath() || "";
+                      const lineNum = diffLine.newLineNumber ?? diffLine.oldLineNumber;
+                      if (lineNum !== undefined) {
+                        const yankText = `${filePath}:${lineNum}`;
+                        extCtx.ui.pasteToEditor(yankText);
+                        done();
+                      }
+                    }
+                  }
                 }
                 return;
               }

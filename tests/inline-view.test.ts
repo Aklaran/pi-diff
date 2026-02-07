@@ -741,4 +741,147 @@ describe('InlineDiffView', () => {
       expect(view.isSeparatorLine(2)).toBe(false); // Second hunk
     });
   });
+
+  describe('Visual mode', () => {
+    it('visual mode starts as false', () => {
+      const view = new InlineDiffView(simpleDiff);
+      expect(view.isVisualMode).toBe(false);
+    });
+
+    it('enterVisualMode sets visual mode and anchor', () => {
+      const view = new InlineDiffView(simpleDiff);
+      view.setCursor(2);
+      
+      view.enterVisualMode();
+      
+      expect(view.isVisualMode).toBe(true);
+      expect(view.visualAnchor).toBe(2);
+      expect(view.cursorLine).toBe(2);
+    });
+
+    it('exitVisualMode clears visual mode', () => {
+      const view = new InlineDiffView(simpleDiff);
+      view.setCursor(2);
+      view.enterVisualMode();
+      expect(view.isVisualMode).toBe(true);
+      
+      view.exitVisualMode();
+      
+      expect(view.isVisualMode).toBe(false);
+    });
+
+    it('getVisualRange returns [anchor, cursor] when anchor < cursor', () => {
+      const view = new InlineDiffView(simpleDiff);
+      view.setCursor(1);
+      view.enterVisualMode();
+      
+      view.moveCursor(2); // Move cursor to line 3
+      
+      const range = view.getVisualRange();
+      expect(range).toEqual([1, 3]);
+    });
+
+    it('getVisualRange returns [cursor, anchor] when cursor < anchor', () => {
+      const view = new InlineDiffView(simpleDiff);
+      view.setCursor(3);
+      view.enterVisualMode();
+      
+      view.moveCursor(-2); // Move cursor to line 1
+      
+      const range = view.getVisualRange();
+      expect(range).toEqual([1, 3]);
+    });
+
+    it('getVisualRange returns single line when anchor === cursor', () => {
+      const view = new InlineDiffView(simpleDiff);
+      view.setCursor(2);
+      view.enterVisualMode();
+      
+      const range = view.getVisualRange();
+      expect(range).toEqual([2, 2]);
+    });
+
+    it('getSelectedRawLines returns raw content without ANSI codes', () => {
+      const view = new InlineDiffView(simpleDiff);
+      view.setCursor(0);
+      view.enterVisualMode();
+      view.moveCursor(2); // Select lines 0, 1, 2
+      
+      const rawLines = view.getSelectedRawLines();
+      
+      expect(rawLines).toHaveLength(3);
+      expect(rawLines[0]).toContain('line 1');
+      expect(rawLines[1]).toContain('line 2 old');
+      expect(rawLines[2]).toContain('line 2 new');
+      // Should not contain ANSI codes
+      expect(rawLines[0]).not.toContain('\x1b[');
+    });
+
+    it('getSelectedDiffLines returns DiffLines, skipping separators', () => {
+      const diff: FileDiff = {
+        filePath: 'test.ts',
+        isNewFile: false,
+        additions: 0,
+        deletions: 0,
+        hunks: [
+          { type: 'context', content: 'line 1', oldLineNumber: 1, newLineNumber: 1 },
+          { type: 'context', content: 'line 2', oldLineNumber: 2, newLineNumber: 2 },
+          // Gap here - separator will be inserted
+          { type: 'context', content: 'line 10', oldLineNumber: 10, newLineNumber: 10 },
+          { type: 'context', content: 'line 11', oldLineNumber: 11, newLineNumber: 11 },
+        ],
+      };
+      
+      const view = new InlineDiffView(diff);
+      view.setCursor(0);
+      view.enterVisualMode();
+      view.moveCursor(3); // Select lines 0-3 (includes separator at line 2)
+      
+      const diffLines = view.getSelectedDiffLines();
+      
+      // Should have 3 DiffLines (separator skipped)
+      expect(diffLines).toHaveLength(3);
+      expect(diffLines[0].content).toBe('line 1');
+      expect(diffLines[1].content).toBe('line 2');
+      expect(diffLines[2].content).toBe('line 10');
+    });
+
+    it('render highlights visual range with reverse video', () => {
+      const view = new InlineDiffView(simpleDiff);
+      view.setCursor(1);
+      view.enterVisualMode();
+      view.moveCursor(1); // Visual range 1-2
+      
+      const lines = view.render(80, 10);
+      
+      // Lines 1 and 2 should have reverse video
+      expect(lines[1]).toContain('\x1b[7m');
+      expect(lines[2]).toContain('\x1b[7m');
+      
+      // Lines outside the range should not
+      expect(lines[0]).not.toContain('\x1b[7m');
+      expect(lines[3]).not.toContain('\x1b[7m');
+    });
+
+    it('setDiff resets visual mode', () => {
+      const view = new InlineDiffView(simpleDiff);
+      view.setCursor(2);
+      view.enterVisualMode();
+      expect(view.isVisualMode).toBe(true);
+      
+      const newDiff: FileDiff = {
+        filePath: 'other.ts',
+        isNewFile: false,
+        additions: 1,
+        deletions: 0,
+        hunks: [
+          { type: 'added', content: 'new content', oldLineNumber: undefined, newLineNumber: 1 },
+        ],
+      };
+      
+      view.setDiff(newDiff);
+      
+      expect(view.isVisualMode).toBe(false);
+    });
+  });
 });

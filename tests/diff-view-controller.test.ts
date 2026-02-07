@@ -22,12 +22,7 @@ describe('DiffViewController', () => {
   });
 
   describe('Initial state', () => {
-    it('defaults to inline mode', () => {
-      const controller = new DiffViewController(simpleDiff);
-      expect(controller.viewMode).toBe('inline');
-    });
-
-    it('renders with inline view by default', () => {
+    it('renders with inline view', () => {
       const controller = new DiffViewController(simpleDiff);
       const lines = controller.render(80, 10);
       
@@ -37,129 +32,112 @@ describe('DiffViewController', () => {
     });
   });
 
-  describe('canUseSideBySide', () => {
-    it('returns true when width >= 120', () => {
+  describe('Cursor delegation', () => {
+    it('cursorLine delegates to inline view', () => {
       const controller = new DiffViewController(simpleDiff);
-      
-      expect(controller.canUseSideBySide(120)).toBe(true);
-      expect(controller.canUseSideBySide(140)).toBe(true);
-      expect(controller.canUseSideBySide(200)).toBe(true);
+      expect(controller.cursorLine).toBe(0);
     });
 
-    it('returns false when width < 120', () => {
+    it('moveCursor delegates to inline view', () => {
       const controller = new DiffViewController(simpleDiff);
-      
-      expect(controller.canUseSideBySide(119)).toBe(false);
-      expect(controller.canUseSideBySide(100)).toBe(false);
-      expect(controller.canUseSideBySide(80)).toBe(false);
-    });
-  });
-
-  describe('toggleViewMode', () => {
-    it('switches to side-by-side when width >= 120', () => {
-      const controller = new DiffViewController(simpleDiff);
-      expect(controller.viewMode).toBe('inline');
-      
-      const result = controller.toggleViewMode(120);
-      
-      expect(result).toBe(true);
-      expect(controller.viewMode).toBe('side-by-side');
+      controller.moveCursor(2);
+      expect(controller.cursorLine).toBe(2);
     });
 
-    it('returns false and stays in inline when width < 120', () => {
+    it('setCursor delegates to inline view', () => {
       const controller = new DiffViewController(simpleDiff);
-      expect(controller.viewMode).toBe('inline');
-      
-      const result = controller.toggleViewMode(100);
-      
-      expect(result).toBe(false);
-      expect(controller.viewMode).toBe('inline');
+      controller.setCursor(3);
+      expect(controller.cursorLine).toBe(3);
     });
 
-    it('toggles back to inline from side-by-side', () => {
+    it('getCursorDiffLine delegates to inline view', () => {
       const controller = new DiffViewController(simpleDiff);
-      
-      controller.toggleViewMode(120);
-      expect(controller.viewMode).toBe('side-by-side');
-      
-      const result = controller.toggleViewMode(120);
-      
-      expect(result).toBe(true);
-      expect(controller.viewMode).toBe('inline');
+      controller.setCursor(0);
+      const diffLine = controller.getCursorDiffLine();
+      expect(diffLine).toBeDefined();
+      expect(diffLine?.content).toBe('line 1');
     });
 
-    it('resets scroll position when switching views', () => {
-      const largeDiff: FileDiff = {
-        filePath: 'large.ts',
+    it('isSeparatorLine delegates to inline view', () => {
+      const diff: FileDiff = {
+        filePath: 'test.ts',
         isNewFile: false,
         additions: 0,
         deletions: 0,
-        hunks: Array.from({ length: 50 }, (_, i) => ({
-          type: 'context' as const,
-          content: `line ${i + 1}`,
-          oldLineNumber: i + 1,
-          newLineNumber: i + 1,
-        })),
+        hunks: [
+          { type: 'context', content: 'line 1', oldLineNumber: 1, newLineNumber: 1 },
+          { type: 'context', content: 'line 10', oldLineNumber: 10, newLineNumber: 10 },
+        ],
       };
       
-      const controller = new DiffViewController(largeDiff);
-      
-      // Scroll down in inline mode
-      controller.scrollDown(20);
-      expect(controller.scrollOffset).toBe(20);
-      
-      // Toggle to side-by-side - scroll should reset
-      controller.toggleViewMode(120);
-      expect(controller.scrollOffset).toBe(0);
-      
-      // Scroll down in side-by-side mode
-      controller.scrollDown(15);
-      expect(controller.scrollOffset).toBe(15);
-      
-      // Toggle back to inline - scroll should reset again
-      controller.toggleViewMode(120);
-      expect(controller.scrollOffset).toBe(0);
+      const controller = new DiffViewController(diff);
+      expect(controller.isSeparatorLine(0)).toBe(false);
+      expect(controller.isSeparatorLine(1)).toBe(true);
+      expect(controller.isSeparatorLine(2)).toBe(false);
     });
   });
 
-  describe('setViewMode', () => {
-    it('forces a specific mode', () => {
+  describe('Visual mode delegation', () => {
+    it('isVisualMode delegates to inline view', () => {
       const controller = new DiffViewController(simpleDiff);
-      expect(controller.viewMode).toBe('inline');
-      
-      controller.setViewMode('side-by-side');
-      expect(controller.viewMode).toBe('side-by-side');
-      
-      controller.setViewMode('inline');
-      expect(controller.viewMode).toBe('inline');
+      expect(controller.isVisualMode).toBe(false);
     });
 
-    it('resets scroll position when changing modes', () => {
-      const largeDiff: FileDiff = {
-        filePath: 'large.ts',
-        isNewFile: false,
-        additions: 0,
-        deletions: 0,
-        hunks: Array.from({ length: 50 }, (_, i) => ({
-          type: 'context' as const,
-          content: `line ${i + 1}`,
-          oldLineNumber: i + 1,
-          newLineNumber: i + 1,
-        })),
-      };
+    it('enterVisualMode delegates to inline view', () => {
+      const controller = new DiffViewController(simpleDiff);
+      controller.setCursor(2);
+      controller.enterVisualMode();
       
-      const controller = new DiffViewController(largeDiff);
+      expect(controller.isVisualMode).toBe(true);
+    });
+
+    it('exitVisualMode delegates to inline view', () => {
+      const controller = new DiffViewController(simpleDiff);
+      controller.enterVisualMode();
+      expect(controller.isVisualMode).toBe(true);
       
-      controller.scrollDown(20);
-      expect(controller.scrollOffset).toBe(20);
+      controller.exitVisualMode();
+      expect(controller.isVisualMode).toBe(false);
+    });
+
+    it('getVisualRange delegates to inline view', () => {
+      const controller = new DiffViewController(simpleDiff);
+      controller.setCursor(1);
+      controller.enterVisualMode();
+      controller.moveCursor(2);
       
-      controller.setViewMode('side-by-side');
-      expect(controller.scrollOffset).toBe(0);
+      const range = controller.getVisualRange();
+      expect(range).toEqual([1, 3]);
+    });
+
+    it('getSelectedRawLines delegates to inline view', () => {
+      const controller = new DiffViewController(simpleDiff);
+      controller.setCursor(0);
+      controller.enterVisualMode();
+      controller.moveCursor(1);
+      
+      const rawLines = controller.getSelectedRawLines();
+      expect(rawLines).toHaveLength(2);
+      expect(rawLines[0]).toContain('line 1');
+      expect(rawLines[1]).toContain('line 2 old');
+    });
+
+    it('getSelectedDiffLines delegates to inline view', () => {
+      const controller = new DiffViewController(simpleDiff);
+      controller.setCursor(0);
+      controller.enterVisualMode();
+      controller.moveCursor(2);
+      
+      const diffLines = controller.getSelectedDiffLines();
+      expect(diffLines).toHaveLength(3);
+      expect(diffLines[0].content).toBe('line 1');
+      expect(diffLines[1].content).toBe('line 2 old');
+      expect(diffLines[2].content).toBe('line 2 new');
     });
   });
 
   describe('Scroll delegation', () => {
-    it('scrollDown delegates to active view', () => {
+    it('scrollDown delegates to inline view', () => {
       const largeDiff: FileDiff = {
         filePath: 'large.ts',
         isNewFile: false,
@@ -175,25 +153,14 @@ describe('DiffViewController', () => {
       
       const controller = new DiffViewController(largeDiff);
       
-      // Test in inline mode
       controller.scrollDown(5);
       expect(controller.scrollOffset).toBe(5);
       
       const lines = controller.render(80, 10);
       expect(lines[0]).toContain('line 6');
-      
-      // Switch to side-by-side
-      controller.setViewMode('side-by-side');
-      
-      // Scroll should work in side-by-side too
-      controller.scrollDown(3);
-      expect(controller.scrollOffset).toBe(3);
-      
-      const lines2 = controller.render(120, 10);
-      expect(lines2[0]).toContain('line 4');
     });
 
-    it('scrollUp delegates to active view', () => {
+    it('scrollUp delegates to inline view', () => {
       const largeDiff: FileDiff = {
         filePath: 'large.ts',
         isNewFile: false,
@@ -214,7 +181,7 @@ describe('DiffViewController', () => {
       expect(controller.scrollOffset).toBe(5);
     });
 
-    it('scrollToTop delegates to active view', () => {
+    it('scrollToTop delegates to inline view', () => {
       const largeDiff: FileDiff = {
         filePath: 'large.ts',
         isNewFile: false,
@@ -235,7 +202,7 @@ describe('DiffViewController', () => {
       expect(controller.scrollOffset).toBe(0);
     });
 
-    it('scrollToBottom delegates to active view', () => {
+    it('scrollToBottom delegates to inline view', () => {
       const largeDiff: FileDiff = {
         filePath: 'large.ts',
         isNewFile: false,
@@ -260,7 +227,7 @@ describe('DiffViewController', () => {
   });
 
   describe('Render delegation', () => {
-    it('delegates to inline view when in inline mode', () => {
+    it('delegates to inline view', () => {
       const controller = new DiffViewController(simpleDiff);
       const lines = controller.render(80, 10);
       
@@ -273,32 +240,16 @@ describe('DiffViewController', () => {
       expect(lines.every(line => !line.includes('│'))).toBe(true);
     });
 
-    it('delegates to side-by-side view when in side-by-side mode', () => {
-      const controller = new DiffViewController(simpleDiff);
-      controller.setViewMode('side-by-side');
-      
-      const lines = controller.render(120, 10);
-      
-      expect(lines.length).toBeGreaterThan(0);
-      // Side-by-side has separator
-      const hasSeparator = lines.some(line => line.includes('│'));
-      expect(hasSeparator).toBe(true);
-    });
-
-    it('totalLines delegates to active view', () => {
+    it('totalLines delegates to inline view', () => {
       const controller = new DiffViewController(simpleDiff);
       
-      const inlineTotalLines = controller.totalLines;
-      expect(inlineTotalLines).toBe(5);
-      
-      controller.setViewMode('side-by-side');
-      const sideBySideTotalLines = controller.totalLines;
-      expect(sideBySideTotalLines).toBe(5);
+      const totalLines = controller.totalLines;
+      expect(totalLines).toBe(5);
     });
   });
 
   describe('setDiff', () => {
-    it('updates both views', () => {
+    it('updates inline view', () => {
       const controller = new DiffViewController(simpleDiff);
       
       const initialLines = controller.render(80, 10);
@@ -316,17 +267,9 @@ describe('DiffViewController', () => {
       
       controller.setDiff(newDiff);
       
-      // Check inline mode
-      controller.setViewMode('inline');
-      const inlineLines = controller.render(80, 10);
-      expect(inlineLines.some(line => line.includes('new content'))).toBe(true);
-      expect(inlineLines.some(line => line.includes('line 1'))).toBe(false);
-      
-      // Check side-by-side mode
-      controller.setViewMode('side-by-side');
-      const sideLines = controller.render(120, 10);
-      expect(sideLines.some(line => line.includes('new content'))).toBe(true);
-      expect(sideLines.some(line => line.includes('line 1'))).toBe(false);
+      const newLines = controller.render(80, 10);
+      expect(newLines.some(line => line.includes('new content'))).toBe(true);
+      expect(newLines.some(line => line.includes('line 1'))).toBe(false);
     });
 
     it('resets scroll offset', () => {
@@ -353,7 +296,7 @@ describe('DiffViewController', () => {
   });
 
   describe('Syntax highlighting', () => {
-    it('passes highlightFn to both views', () => {
+    it('passes highlightFn to inline view', () => {
       const calls: string[] = [];
       const highlightFn = (code: string) => {
         calls.push(code);
@@ -372,19 +315,12 @@ describe('DiffViewController', () => {
       
       const controller = new DiffViewController(diff, highlightFn);
       
-      // highlightFn should have been called during construction for both views
-      // inline view: once for the context line
-      // side-by-side view: twice for the context line (left and right panels)
-      expect(calls.length).toBe(3);
+      // highlightFn should have been called during construction for inline view
+      expect(calls.length).toBeGreaterThan(0);
       
       // Test inline mode rendering
       const inlineLines = controller.render(80, 10);
       expect(inlineLines[0]).toContain('HIGHLIGHTED:const x = 1;');
-      
-      // Test side-by-side mode rendering
-      controller.setViewMode('side-by-side');
-      const sideLines = controller.render(120, 10);
-      expect(sideLines[0]).toContain('HIGHLIGHTED:const x = 1;');
     });
   });
 });
