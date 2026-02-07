@@ -177,13 +177,12 @@ export class InlineDiffView {
         inVisualRange = lineIndex >= min && lineIndex <= max;
       }
       
-      // Highlight lines in visual range or cursor line with reverse video
+      // Highlight cursor line or visual selection with subtle dark gray background
       if (inVisualRange || lineIndex === this._cursorLine) {
-        // Insert reverse video before the content and end it before final reset
-        // Replace the final \x1b[0m with \x1b[27m\x1b[0m to properly end reverse video
-        content = content.replace(/\x1b\[0m$/, '\x1b[27m\x1b[0m');
-        // Insert reverse video at the start (after any initial color codes)
-        content = content.replace(/^(\x1b\[\d+m)?/, '$1\x1b[7m');
+        // Use 256-color dark gray background (236 = #303030) — subtle, won't clash with syntax colors
+        // Wrap entire line: set bg at start, reset bg before final reset
+        content = content.replace(/\x1b\[0m$/, '\x1b[49m\x1b[0m');
+        content = `\x1b[48;5;236m${content}`;
       }
       
       return this.truncateToWidth(content, width);

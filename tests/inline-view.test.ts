@@ -82,7 +82,7 @@ describe('InlineDiffView', () => {
       
       // Extract the position where the content starts (should be same for all)
       // Strip ANSI codes first
-      const strippedLines = contentLines.map(line => line.replace(/\x1b\[\d+m/g, ''));
+      const strippedLines = contentLines.map(line => line.replace(/\x1b\[[0-9;]*m/g, ''));
       const contentStarts = strippedLines.map(line => line.indexOf('line'));
       
       expect(contentStarts[0]).toBeGreaterThan(0);
@@ -378,7 +378,7 @@ describe('InlineDiffView', () => {
       
       expect(lines).toHaveLength(1);
       // Strip ANSI codes to count visible characters
-      const visible = lines[0].replace(/\x1b\[\d+m/g, '');
+      const visible = lines[0].replace(/\x1b\[[0-9;]*m/g, '');
       expect(visible.length).toBeLessThanOrEqual(50);
     });
 
@@ -388,7 +388,7 @@ describe('InlineDiffView', () => {
       
       expect(lines.length).toBeGreaterThan(0);
       lines.forEach(line => {
-        const visible = line.replace(/\x1b\[\d+m/g, '');
+        const visible = line.replace(/\x1b\[[0-9;]*m/g, '');
         expect(visible.length).toBeLessThanOrEqual(20);
       });
     });
@@ -714,12 +714,12 @@ describe('InlineDiffView', () => {
       const lines = view.render(80, 10);
       
       // The line at cursor position should have reverse video
-      expect(lines[1]).toContain('\x1b[7m'); // Reverse video
-      expect(lines[1]).toContain('\x1b[27m'); // End reverse video
+      expect(lines[1]).toContain('\x1b[48;5;236m'); // Dark gray background
+      expect(lines[1]).toContain('\x1b[49m'); // Reset background
       
       // Other lines should not have reverse video
-      expect(lines[0]).not.toContain('\x1b[7m');
-      expect(lines[2]).not.toContain('\x1b[7m');
+      expect(lines[0]).not.toContain('\x1b[48;5;236m');
+      expect(lines[2]).not.toContain('\x1b[48;5;236m');
     });
 
     it('isSeparatorLine returns true for separator, false for hunk lines', () => {
@@ -855,12 +855,12 @@ describe('InlineDiffView', () => {
       const lines = view.render(80, 10);
       
       // Lines 1 and 2 should have reverse video
-      expect(lines[1]).toContain('\x1b[7m');
-      expect(lines[2]).toContain('\x1b[7m');
+      expect(lines[1]).toContain('\x1b[48;5;236m');
+      expect(lines[2]).toContain('\x1b[48;5;236m');
       
       // Lines outside the range should not
-      expect(lines[0]).not.toContain('\x1b[7m');
-      expect(lines[3]).not.toContain('\x1b[7m');
+      expect(lines[0]).not.toContain('\x1b[48;5;236m');
+      expect(lines[3]).not.toContain('\x1b[48;5;236m');
     });
 
     it('setDiff resets visual mode', () => {
