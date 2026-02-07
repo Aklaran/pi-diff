@@ -30,3 +30,13 @@ TDD is the rule. Write failing tests first, then implement.
 npx vitest run          # all tests
 npx vitest run --watch  # watch mode
 ```
+
+## Task Tracking
+
+This project uses [Beads](https://github.com/steveyegge/beads) for issue tracking:
+
+```bash
+bd ready    # what's unblocked?
+bd list     # all issues
+bd graph --all  # dependency graph
+```
