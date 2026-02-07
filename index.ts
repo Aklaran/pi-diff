@@ -94,7 +94,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   // --- Ctrl+R shortcut to toggle modal ---
-  pi.registerShortcut("ctrl+r", {
+  pi.registerShortcut("ctrl+shift+r", {
     description: "Toggle diff review modal",
     handler: async (ctx) => {
       if (!ctx.hasUI) return;
