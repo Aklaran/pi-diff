@@ -142,29 +142,34 @@ export default function (pi: ExtensionAPI) {
 
           return {
             render(width: number): string[] {
-              const lines: string[] = [];
-              const height = tui.height ?? 50;
+              // targetHeight = total output lines INCLUDING top + bottom border
+              // Use tui.height if available, otherwise conservative fallback
+              const termHeight = tui.height ?? 40;
+              const targetHeight = Math.max(20, Math.floor(termHeight * 0.75));
+              const innerWidth = width - 4; // 2 for border chars + 2 for padding
               const fileList = modal.getFileList();
+              const content: string[] = [];
 
+              const border = theme.fg("border", "│");
+              const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
+              const padLine = (line: string) => {
+                const truncated = truncateToWidth(line, innerWidth);
+                const visible = stripAnsi(truncated).length;
+                const rightPad = Math.max(0, innerWidth - visible);
+                return `${border} ${truncated}${" ".repeat(rightPad)} ${border}`;
+              };
+              const emptyLine = () => `${border}${" ".repeat(width - 2)}${border}`;
+
+              // Build content lines (without borders)
               if (fileList.length === 0) {
-                lines.push(
-                  theme.fg("accent", theme.bold(" Diff Review ")) +
-                    theme.fg("muted", "(0 files)")
-                );
-                lines.push(theme.fg("border", "─".repeat(Math.min(width, 80))));
-                lines.push(theme.fg("muted", " No files to review"));
-                lines.push("");
-                lines.push(theme.fg("dim", " Press Escape or Ctrl+R to close"));
-                return lines;
-              }
+                content.push(theme.fg("muted", "No files to review"));
+                content.push("");
+                content.push(theme.fg("dim", "Press Escape or Ctrl+Shift+R to close"));
+              } else if (modal.isFilePickerOpen) {
+                // File picker mode
+                content.push(theme.fg("accent", theme.bold("File Picker")));
+                content.push("");
 
-              // File picker mode
-              if (modal.isFilePickerOpen) {
-                lines.push(theme.fg("accent", theme.bold(" File Picker ")));
-                lines.push(theme.fg("border", "─".repeat(Math.min(width, 80))));
-                lines.push("");
-
-                // Center the file list
                 for (let i = 0; i < fileList.length; i++) {
                   const file = fileList[i];
                   const selected = i === modal.filePickerIndex;
@@ -174,60 +179,78 @@ export default function (pi: ExtensionAPI) {
                     : theme.fg("text", file.path);
                   const stats = theme.fg("muted", ` +${file.additions}/-${file.deletions}`);
                   const tag = file.isNewFile ? theme.fg("success", " [new]") : "";
-                  lines.push(truncateToWidth(`${prefix}${name}${stats}${tag}`, width));
+                  content.push(`${prefix}${name}${stats}${tag}`);
                 }
 
-                lines.push("");
-                lines.push(theme.fg("dim", " ↑↓ navigate  Enter select  Esc cancel"));
-                return lines.map((l) => truncateToWidth(l, width));
-              }
+                content.push("");
+                content.push(theme.fg("dim", "↑↓ navigate  Enter select  Esc cancel"));
+              } else {
+                // Full-screen diff view
+                const currentFile = fileList[modal.selectedIndex];
+                const fileIndex = modal.selectedIndex + 1;
+                const totalFiles = fileList.length;
 
-              // Full-screen diff view
-              const currentFile = fileList[modal.selectedIndex];
-              const fileIndex = modal.selectedIndex + 1;
-              const totalFiles = fileList.length;
+                // Header bar
+                const fileNumStr = `[${fileIndex}/${totalFiles}]`;
+                const filePathStr = theme.fg("accent", currentFile.path);
+                const statsStr = theme.fg("muted", ` +${currentFile.additions}/-${currentFile.deletions}`);
+                const viewModeStr = viewController 
+                  ? (viewController.viewMode === "inline" ? "Inline" : "Side-by-side")
+                  : "";
 
-              // Header bar: [N/M] filepath  +X/-Y         View mode
-              const fileNumStr = `[${fileIndex}/${totalFiles}]`;
-              const filePathStr = theme.fg("accent", currentFile.path);
-              const statsStr = theme.fg("muted", ` +${currentFile.additions}/-${currentFile.deletions}`);
-              const viewModeStr = viewController 
-                ? (viewController.viewMode === "inline" ? "Inline view" : "Side-by-side view")
-                : "";
+                const leftSide = `${fileNumStr} ${filePathStr}${statsStr}`;
+                const leftSideStripped = `${fileNumStr} ${currentFile.path} +${currentFile.additions}/-${currentFile.deletions}`;
+                const hPadding = Math.max(1, innerWidth - leftSideStripped.length - viewModeStr.length);
+                content.push(leftSide + " ".repeat(hPadding) + theme.fg("dim", viewModeStr));
+                content.push(theme.fg("border", "─".repeat(innerWidth)));
 
-              // Build header with view mode right-aligned
-              const leftSide = `${fileNumStr} ${filePathStr}${statsStr}`;
-              const leftSideStripped = `${fileNumStr} ${currentFile.path} +${currentFile.additions}/-${currentFile.deletions}`;
-              const padding = Math.max(1, width - leftSideStripped.length - viewModeStr.length);
-              const header = leftSide + " ".repeat(padding) + theme.fg("dim", viewModeStr);
-              
-              lines.push(truncateToWidth(header, width));
-              lines.push(theme.fg("border", "─".repeat(Math.min(width, 80))));
+                // Diff content — reserve 4 lines: header, separator, help blank, help text
+                if (viewController) {
+                  // targetHeight minus: top border(1) + header(1) + separator(1) + help(1) + bottom border(1) + buffer(1)
+                  const availableHeight = Math.max(5, targetHeight - 8);
+                  const diffLines = viewController.render(innerWidth, availableHeight);
+                  content.push(...diffLines);
 
-              // Diff content
-              if (viewController) {
-                // Reserve space for header (2 lines), scroll indicator (1 line), and help (2 lines)
-                const availableHeight = Math.max(5, height - 5);
-                const diffLines = viewController.render(width, availableHeight);
-                lines.push(...diffLines);
-
-                // Scroll indicator
-                if (viewController.totalLines > availableHeight) {
-                  const pct = Math.round(
-                    ((viewController.scrollOffset + availableHeight) /
-                      viewController.totalLines) * 100
-                  );
-                  lines.push(theme.fg("dim", `── ${Math.min(pct, 100)}% ──`));
+                  // Scroll indicator
+                  if (viewController.totalLines > availableHeight) {
+                    const pct = Math.round(
+                      ((viewController.scrollOffset + availableHeight) /
+                        viewController.totalLines) * 100
+                    );
+                    content.push(theme.fg("dim", `── ${Math.min(pct, 100)}% ──`));
+                  }
                 }
               }
 
-              // Help
-              lines.push("");
-              lines.push(
-                theme.fg("dim", " n/p files  d dismiss  Tab file list  Ctrl+D/U scroll  v view  y copy  Esc close")
-              );
+              // Assemble bordered output, padded to fixed height
+              const output: string[] = [];
 
-              return lines.map((l) => truncateToWidth(l, width));
+              // Top border
+              const titleText = " Diff Review ";
+              const topBorderLeft = "╭─";
+              const topBorderRight = "─".repeat(Math.max(0, width - topBorderLeft.length - titleText.length - 1)) + "╮";
+              output.push(theme.fg("border", topBorderLeft) + theme.fg("accent", theme.bold(titleText)) + theme.fg("border", topBorderRight));
+
+              // Content lines with side borders
+              for (const line of content) {
+                output.push(padLine(line));
+              }
+
+              // Pad to fill fixed height: targetHeight total minus top border (already added) minus bottom border (added after)
+              while (output.length < targetHeight - 1) {
+                output.push(emptyLine());
+              }
+
+              // Help line (overwrite last empty line)
+              if (fileList.length > 0 && !modal.isFilePickerOpen) {
+                const helpText = theme.fg("dim", "n/p files  d dismiss  Tab file list  Ctrl+D/U scroll  v view  y copy  Esc close");
+                output[output.length - 1] = padLine(helpText);
+              }
+
+              // Bottom border
+              output.push(theme.fg("border", `╰${"─".repeat(width - 2)}╯`));
+
+              return output;
             },
 
             handleInput(data: string) {
@@ -349,7 +372,6 @@ export default function (pi: ExtensionAPI) {
           overlayOptions: {
             anchor: "center",
             width: "90%",
-            maxHeight: "90%",
             minWidth: 60,
             margin: 1,
           },
